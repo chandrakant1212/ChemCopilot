@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 from dotenv import load_dotenv
 from rag.retriever import load_vectorstore
-from rag.pipeline import get_engineering_response
+from rag.pipeline import get_engineering_response, clean_latex_for_markdown
 from calculations.fluidization import calc_umf_wen_yu, calc_terminal_velocity, calc_bubble_velocity
 from calculations.heat_exchanger import calc_lmtd, calc_heat_exchanger_area
 from calculations.reactor_design import cstr_volume, pfr_volume_nth_order
@@ -395,7 +395,7 @@ if not kb_ready:
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+        st.markdown(clean_latex_for_markdown(msg["content"]))
 
 if st.session_state.last_query:
     injected_query = st.session_state.last_query

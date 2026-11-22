@@ -1,4 +1,5 @@
 import os
+import re
 import httpx
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -9,6 +10,46 @@ load_dotenv()
 # Lazy-initialized client and model (supports Groq and NVIDIA NIM)
 _client = None
 _model = None
+
+def clean_latex_for_markdown(text: str) -> str:
+    """
+    Format LaTeX equations so Streamlit's KaTeX renderer displays them beautifully:
+    1. Removes \\tag{...} which breaks KaTeX in Streamlit markdown.
+    2. Converts \\[ ... \\] to $$ ... $$ (display math).
+    3. Converts \\( ... \\) to $ ... $ (inline math).
+    4. Converts bare [ ... ] containing LaTeX math.
+    """
+    if not text:
+        return text
+
+    # Remove \\tag{...} inside equations (KaTeX doesn't support amsmath tags in markdown)
+    text = re.sub(r'\\tag\{[^}]*\}', '', text)
+
+    # Remove \\displaystyle since KaTeX handles inline/display naturally
+    text = re.sub(r'\\displaystyle\s*', '', text)
+
+    # Convert \\[ ... \\] to $$ ... $$
+    text = re.sub(r'\\\[\s*(.*?)\s*\\\]', lambda m: f"\n\n$$\n{m.group(1).strip()}\n$$\n\n", text, flags=re.DOTALL)
+
+    # Convert \\( ... \\) to $ ... $
+    text = re.sub(r'\\\(\s*(.*?)\s*\\\)', lambda m: f"${m.group(1).strip()}$", text, flags=re.DOTALL)
+
+    # If the LLM output bare [ ... ] containing LaTeX math on a line by itself
+    def replace_bracket_math(m):
+        inner = m.group(1).strip()
+        if any(cmd in inner for cmd in [r'\frac', r'\rho', r'\mu', r'\Delta', r'\times', r'\epsilon', r'\phi', r'\left', r'\right', r'd_p', r'U_{', r'=']):
+            return f"\n\n$$\n{inner}\n$$\n\n"
+        return m.group(0)
+
+    text = re.sub(r'(?m)^\[\s*([\\].*?)\s*\]$', replace_bracket_math, text)
+    text = re.sub(r'(?m)^\[\s*([A-Za-z_].*?)\s*\]$', replace_bracket_math, text)
+
+    # Clean up double $$ with spaces
+    text = re.sub(r'\$\$\s*\$\$', '', text)
+    # Clean up 3+ newlines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+
+    return text.strip()
 
 def _resolve_groq_model(client):
     """Dynamically resolve the best active text model available to the Groq API key."""
@@ -86,16 +127,26 @@ chemical engineering students and professionals. You have deep knowledge of:
 
 STRICT RESPONSE FORMAT — follow this for every calculation question:
 
-1. **GIVEN DATA** — list all provided values with units
+1. **GIVEN DATA** — list all provided values with units in a clean markdown table
 2. **FIND** — state what needs to be calculated
 3. **ASSUMPTIONS** — list all assumptions explicitly
-4. **GOVERNING EQUATIONS** — write each equation in LaTeX (use $...$ for inline, $$...$$ for display)
+4. **GOVERNING EQUATIONS** — write each equation clearly formatted in LaTeX
 5. **STEP-BY-STEP SOLUTION** — substitute values numerically at each step, show units
 6. **RESULTS TABLE** — markdown table summarizing all results with units
 7. **PHYSICAL INTERPRETATION** — one paragraph explaining what the numbers mean physically
 
+CRITICAL LATEX & EQUATION FORMATTING RULES:
+- ALWAYS enclose standalone/display equations with $$ on separate lines, e.g.:
+  $$
+  U_{mf} = \frac{d_p^2 (\rho_s - \rho_g) g}{150 \mu}
+  $$
+- ALWAYS enclose inline math, variables, and units with single $, e.g.: $d_p = 300\text{ }\mu\text{m}$, $\rho_g = 0.525\text{ kg/m}^3$.
+- NEVER use \[ ... \] or \( ... \) delimiters.
+- NEVER use bare square brackets [ ... ] or parentheses ( ... ) to enclose equations.
+- NEVER use \tag{...} inside equations. Cite sources in normal text beside or above the equation.
+
 CITATION RULES:
-- Always cite equation sources: (K&L Eq. 3.1), (Perry's §6), (C&R Vol.2 Ch.12)
+- Always cite equation sources in text: (K&L Eq. 3.1), (Perry's §6), (C&R Vol.2 Ch.12)
 - Flag uncertain values or assumptions with ⚠️
 - If the textbook context contradicts your training, prefer the textbook context
 
@@ -178,7 +229,8 @@ Provide a complete, structured engineering solution following the format in your
                     raise api_err
             else:
                 raise api_err
-        return response.choices[0].message.content, docs
+        clean_content = clean_latex_for_markdown(response.choices[0].message.content)
+        return clean_content, docs
     except Exception as e:
         error_msg = (
             f"⚠️ **API Error:** {str(e)}\n\n"
