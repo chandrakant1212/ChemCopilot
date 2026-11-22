@@ -24,7 +24,7 @@ def _get_client_and_model():
             base_url=os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
             api_key=groq_key,
         )
-        _model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        _model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
     elif nvidia_key:
         _client = OpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
@@ -41,7 +41,7 @@ def _get_client_and_model():
             base_url=os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1"),
             api_key=os.getenv("LLM_API_KEY", ""),
         )
-        _model = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
+        _model = os.getenv("LLM_MODEL", "llama-3.1-8b-instant")
 
     return _client, _model
 
@@ -117,13 +117,26 @@ Provide a complete, structured engineering solution following the format in your
 
     try:
         client, model = _get_client_and_model()
-        response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
-            temperature=0.2,
-            max_tokens=2500,
-            top_p=0.9
-        )
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
+                temperature=0.2,
+                max_tokens=2500,
+                top_p=0.9
+            )
+        except Exception as api_err:
+            # Automatic fallback to llama-3.1-8b-instant if the requested model returns 404
+            if ("404" in str(api_err) or "does not exist" in str(api_err)) and model != "llama-3.1-8b-instant":
+                response = client.chat.completions.create(
+                    model="llama-3.1-8b-instant",
+                    messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
+                    temperature=0.2,
+                    max_tokens=2500,
+                    top_p=0.9
+                )
+            else:
+                raise api_err
         return response.choices[0].message.content, docs
     except Exception as e:
         error_msg = (
