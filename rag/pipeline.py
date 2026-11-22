@@ -23,7 +23,7 @@ def _get_client():
         )
     return _client
 
-MODEL = "meta/llama-3.1-70b-instruct"
+MODEL = os.getenv("NVIDIA_MODEL", "meta/llama-3.3-70b-instruct")
 
 SYSTEM_PROMPT = """You are ChemCopilot, an expert chemical process engineering assistant built for 
 chemical engineering students and professionals. You have deep knowledge of:

@@ -2,7 +2,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.35-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)
-![NVIDIA NIM](https://img.shields.io/badge/NVIDIA_NIM-LLaMA_3.1_70B-76B900?style=for-the-badge&logo=nvidia&logoColor=white)
+![NVIDIA NIM](https://img.shields.io/badge/NVIDIA_NIM-LLaMA_3.3_70B-76B900?style=for-the-badge&logo=nvidia&logoColor=white)
 ![FAISS](https://img.shields.io/badge/FAISS-Vector_Search-0467DF?style=for-the-badge&logo=meta&logoColor=white)
 ![LangChain](https://img.shields.io/badge/LangChain-0.2-1C3C3C?style=for-the-badge)
 [![🤗 Live Demo](https://img.shields.io/badge/🤗%20Hugging%20Face-Live%20Demo-FFD21E?style=for-the-badge)](https://huggingface.co/spaces/Chandrakant2121/ChemCopilot)
@@ -150,7 +150,7 @@ chemcopilot/
 
 | Component | Technology |
 |-----------|-----------|
-| **LLM** | Meta LLaMA 3.1 70B via NVIDIA NIM |
+| **LLM** | Meta LLaMA 3.3 70B via NVIDIA NIM |
 | **Embeddings** | `all-MiniLM-L6-v2` (sentence-transformers) |
 | **Vector Store** | FAISS (CPU) |
 | **Orchestration** | LangChain 0.2 |
