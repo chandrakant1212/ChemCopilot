@@ -10,6 +10,35 @@ load_dotenv()
 _client = None
 _model = None
 
+def _resolve_groq_model(client):
+    """Dynamically resolve the best active text model available to the Groq API key."""
+    configured = os.getenv("GROQ_MODEL")
+    if configured:
+        return configured
+    try:
+        models = client.models.list()
+        active_ids = [m.id for m in models.data]
+        candidates = [
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "qwen/qwen3.8-27b",
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+        ]
+        for c in candidates:
+            if c in active_ids:
+                return c
+        # Filter out audio and guard models
+        text_models = [
+            m for m in active_ids
+            if not any(skip in m.lower() for skip in ["whisper", "guard", "orpheus", "safeguard"])
+        ]
+        if text_models:
+            return text_models[0]
+        return active_ids[0] if active_ids else "openai/gpt-oss-120b"
+    except Exception:
+        return "openai/gpt-oss-120b"
+
 def _get_client_and_model():
     """Return cached (client, model), prioritizing Groq if GROQ_API_KEY is present, then NVIDIA NIM."""
     global _client, _model
@@ -24,7 +53,7 @@ def _get_client_and_model():
             base_url=os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
             api_key=groq_key,
         )
-        _model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+        _model = _resolve_groq_model(_client)
     elif nvidia_key:
         _client = OpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
@@ -41,7 +70,7 @@ def _get_client_and_model():
             base_url=os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1"),
             api_key=os.getenv("LLM_API_KEY", ""),
         )
-        _model = os.getenv("LLM_MODEL", "llama-3.1-8b-instant")
+        _model = _resolve_groq_model(_client)
 
     return _client, _model
 
@@ -126,15 +155,24 @@ Provide a complete, structured engineering solution following the format in your
                 top_p=0.9
             )
         except Exception as api_err:
-            # Automatic fallback to llama-3.1-8b-instant if the requested model returns 404
-            if ("404" in str(api_err) or "does not exist" in str(api_err)) and model != "llama-3.1-8b-instant":
-                response = client.chat.completions.create(
-                    model="llama-3.1-8b-instant",
-                    messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
-                    temperature=0.2,
-                    max_tokens=2500,
-                    top_p=0.9
-                )
+            if "404" in str(api_err) or "does not exist" in str(api_err):
+                # Dynamically fetch available models from account and retry
+                models = client.models.list()
+                text_models = [
+                    m.id for m in models.data
+                    if not any(skip in m.id.lower() for skip in ["whisper", "guard", "orpheus", "safeguard"])
+                    and m.id != model
+                ]
+                if text_models:
+                    response = client.chat.completions.create(
+                        model=text_models[0],
+                        messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
+                        temperature=0.2,
+                        max_tokens=2500,
+                        top_p=0.9
+                    )
+                else:
+                    raise api_err
             else:
                 raise api_err
         return response.choices[0].message.content, docs
