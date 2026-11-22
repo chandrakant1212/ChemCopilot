@@ -100,7 +100,8 @@ CITATION RULES:
 - If the textbook context contradicts your training, prefer the textbook context
 
 UNITS: Use SI units (m, kg, s, K, Pa) unless the user specifies otherwise.
-NEVER skip calculation steps. NEVER hallucinate equation numbers."""
+NEVER skip calculation steps. NEVER hallucinate equation numbers.
+ALWAYS complete all 7 sections thoroughly without truncating or leaving equations unclosed."""
 
 
 def get_engineering_response(
@@ -144,6 +145,8 @@ Provide a complete, structured engineering solution following the format in your
             messages.append(turn)
     messages.append({"role": "user", "content": augmented_prompt})
 
+    max_output_tokens = int(os.getenv("MAX_TOKENS", 8192))
+
     try:
         client, model = _get_client_and_model()
         try:
@@ -151,7 +154,7 @@ Provide a complete, structured engineering solution following the format in your
                 model=model,
                 messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
                 temperature=0.2,
-                max_tokens=2500,
+                max_tokens=max_output_tokens,
                 top_p=0.9
             )
         except Exception as api_err:
@@ -168,7 +171,7 @@ Provide a complete, structured engineering solution following the format in your
                         model=text_models[0],
                         messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
                         temperature=0.2,
-                        max_tokens=2500,
+                        max_tokens=max_output_tokens,
                         top_p=0.9
                     )
                 else:
