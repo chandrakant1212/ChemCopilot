@@ -6,24 +6,44 @@ from rag.retriever import retrieve_context, format_context
 
 load_dotenv()
 
-# Lazy-initialized client (avoids httpx/openai proxies incompatibility at import time)
+# Lazy-initialized client and model (supports Groq and NVIDIA NIM)
 _client = None
+_model = None
 
-def _get_client():
-    """Return a cached OpenAI client, creating it on first call."""
-    global _client
-    if _client is None:
+def _get_client_and_model():
+    """Return cached (client, model), prioritizing Groq if GROQ_API_KEY is present, then NVIDIA NIM."""
+    global _client, _model
+    if _client is not None and _model is not None:
+        return _client, _model
+
+    groq_key = os.getenv("GROQ_API_KEY")
+    nvidia_key = os.getenv("NVIDIA_NIM_API_KEY")
+
+    if groq_key:
+        _client = OpenAI(
+            base_url=os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
+            api_key=groq_key,
+        )
+        _model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    elif nvidia_key:
         _client = OpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
-            api_key=os.getenv("NVIDIA_NIM_API_KEY"),
+            api_key=nvidia_key,
             http_client=httpx.Client(
                 base_url="https://integrate.api.nvidia.com/v1",
                 follow_redirects=True,
             ),
         )
-    return _client
+        _model = os.getenv("NVIDIA_MODEL", "meta/llama-3.3-70b-instruct")
+    else:
+        # Default to Groq
+        _client = OpenAI(
+            base_url=os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1"),
+            api_key=os.getenv("LLM_API_KEY", ""),
+        )
+        _model = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
 
-MODEL = os.getenv("NVIDIA_MODEL", "meta/llama-3.3-70b-instruct")
+    return _client, _model
 
 SYSTEM_PROMPT = """You are ChemCopilot, an expert chemical process engineering assistant built for 
 chemical engineering students and professionals. You have deep knowledge of:
@@ -96,8 +116,9 @@ Provide a complete, structured engineering solution following the format in your
     messages.append({"role": "user", "content": augmented_prompt})
 
     try:
-        response = _get_client().chat.completions.create(
-            model=MODEL,
+        client, model = _get_client_and_model()
+        response = client.chat.completions.create(
+            model=model,
             messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
             temperature=0.2,
             max_tokens=2500,
@@ -105,5 +126,9 @@ Provide a complete, structured engineering solution following the format in your
         )
         return response.choices[0].message.content, docs
     except Exception as e:
-        error_msg = f"⚠️ **API Error:** {str(e)}\n\nPlease check your `NVIDIA_NIM_API_KEY` in the `.env` file and ensure it is valid."
+        error_msg = (
+            f"⚠️ **API Error:** {str(e)}\n\n"
+            "Please check your `GROQ_API_KEY` (or `NVIDIA_NIM_API_KEY`) in your environment / Space secrets "
+            "and ensure it is valid."
+        )
         return error_msg, docs

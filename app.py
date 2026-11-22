@@ -379,7 +379,7 @@ with st.sidebar:
 st.markdown("""
 <div class="main-header">
     <h1>⚗️ ChemCopilot</h1>
-    <p>Your AI-powered Chemical Process Engineering assistant — powered by RAG + NVIDIA NIM</p>
+    <p>Your AI-powered Chemical Process Engineering assistant — powered by RAG + LLaMA 3.3</p>
 </div>
 """, unsafe_allow_html=True)
 
